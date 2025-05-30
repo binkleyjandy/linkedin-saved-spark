@@ -42,6 +42,13 @@ const Index = () => {
     setPosts([]);
   };
 
+  const navigateToScraping = () => {
+    const scrapingTab = document.querySelector('[value="scraping"]') as HTMLElement;
+    if (scrapingTab) {
+      scrapingTab.click();
+    }
+  };
+
   if (!isAuthenticated) {
     return <LinkedInAuth onAuthSuccess={handleAuthSuccess} />;
   }
@@ -123,7 +130,7 @@ const Index = () => {
                   No posts available yet. Please scrape your LinkedIn posts first.
                 </p>
                 <button
-                  onClick={() => document.querySelector('[value="scraping"]')?.click()}
+                  onClick={navigateToScraping}
                   className="text-linkedin-blue hover:text-linkedin-blue-dark underline"
                 >
                   Go to Scraping →
