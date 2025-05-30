@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Linkedin, Database, MessageSquare, BarChart3 } from 'lucide-react';
@@ -7,10 +6,12 @@ import ScrapingInterface from '@/components/ScrapingInterface';
 import ChatInterface from '@/components/ChatInterface';
 import PostsDisplay from '@/components/PostsDisplay';
 import { LinkedInPost } from '@/types/linkedin';
+import { useToast } from '@/hooks/use-toast';
 
 const Index = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [posts, setPosts] = useState<LinkedInPost[]>([]);
+  const { toast } = useToast();
 
   useEffect(() => {
     // Check if user is already authenticated
@@ -24,7 +25,28 @@ const Index = () => {
     if (savedPosts) {
       setPosts(JSON.parse(savedPosts));
     }
-  }, []);
+
+    // Listen for posts from Chrome extension
+    const handleExtensionMessage = (event: MessageEvent) => {
+      if (event.data.type === 'LINKEDIN_POSTS_IMPORT') {
+        const importedPosts = event.data.posts;
+        if (importedPosts && importedPosts.length > 0) {
+          setPosts(importedPosts);
+          localStorage.setItem('linkedin_posts', JSON.stringify(importedPosts));
+          toast({
+            title: "Posts Imported Successfully!",
+            description: `Imported ${importedPosts.length} posts from LinkedIn.`,
+          });
+        }
+      }
+    };
+
+    window.addEventListener('message', handleExtensionMessage);
+
+    return () => {
+      window.removeEventListener('message', handleExtensionMessage);
+    };
+  }, [toast]);
 
   const handleAuthSuccess = () => {
     setIsAuthenticated(true);
@@ -102,9 +124,14 @@ const Index = () => {
                 Import Your LinkedIn Saved Posts
               </h2>
               <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                Scrape your saved LinkedIn posts and unlock the power of AI-driven search and analysis.
+                Use our Chrome extension to scrape your saved LinkedIn posts and unlock the power of AI-driven search and analysis.
                 Find insights, patterns, and specific content with natural language queries.
               </p>
+              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-blue-800 text-sm">
+                  <strong>Chrome Extension Available!</strong> Install our extension to directly import your LinkedIn saved posts.
+                </p>
+              </div>
             </div>
             <ScrapingInterface 
               onScrapingComplete={handleScrapingComplete}
