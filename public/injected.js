@@ -8,7 +8,7 @@
     if (event.source !== window) return;
     
     if (event.data.type === 'SCRAPE_CURRENT_PAGE') {
-      const posts = scrapeLinkedInPosts();
+      const posts = scrapeLinkedInSavedPosts();
       window.postMessage({
         type: 'SCRAPED_POSTS',
         posts: posts
@@ -16,67 +16,42 @@
     }
   });
   
-  function scrapeLinkedInPosts() {
+  function scrapeLinkedInSavedPosts() {
     const posts = [];
     
-    // LinkedIn saved posts are typically in articles or post containers
-    const postSelectors = [
-      '[data-urn*="urn:li:activity"]',
-      '.feed-shared-update-v2',
-      '.occludable-update',
-      'article[data-urn]',
-      '.feed-shared-update-v2__description-wrapper'
-    ];
+    // Target the specific UL container for saved posts
+    const postsContainer = document.querySelector('body > div.application-outlet > div.authentication-outlet > div > main > section > div > div.scaffold-finite-scroll__content > div > div:nth-child(4) > div > ul');
     
-    let postElements = [];
-    
-    // Try different selectors to find posts
-    for (const selector of postSelectors) {
-      const elements = document.querySelectorAll(selector);
-      if (elements.length > 0) {
-        postElements = Array.from(elements);
-        break;
-      }
+    if (!postsContainer) {
+      console.log('Posts container not found');
+      return posts;
     }
+    
+    // Get all LI elements (each represents a saved post)
+    const postElements = postsContainer.querySelectorAll('li');
+    console.log(`Found ${postElements.length} post elements`);
     
     postElements.forEach((element, index) => {
       try {
-        const post = extractPostData(element, index);
-        if (post && post.content) {
+        const post = extractSavedPostData(element, index);
+        if (post && post.content && post.content.trim().length > 0) {
           posts.push(post);
+          console.log(`Extracted post ${index + 1}:`, post.content.substring(0, 100) + '...');
         }
       } catch (error) {
-        console.error('Error extracting post:', error);
+        console.error(`Error extracting post ${index + 1}:`, error);
       }
     });
     
+    console.log(`Successfully extracted ${posts.length} posts`);
     return posts;
   }
   
-  function extractPostData(element, index) {
-    // Extract author information
-    const authorElement = element.querySelector('[data-urn*="urn:li:member"] a, .feed-shared-actor__name a, .update-components-actor__name a');
-    const authorName = authorElement ? 
-      (authorElement.textContent || authorElement.innerText || '').trim() : 
-      `LinkedIn User ${index + 1}`;
-    
-    const authorUrl = authorElement ? 
-      authorElement.href || '' : 
-      '';
-    
-    // Extract author headline
-    const headlineElement = element.querySelector('.feed-shared-actor__description, .update-components-actor__description');
-    const headline = headlineElement ? 
-      (headlineElement.textContent || headlineElement.innerText || '').trim() : 
-      '';
-    
-    // Extract post content
+  function extractSavedPostData(element, index) {
+    // Extract post content using the specific selector pattern
     const contentSelectors = [
-      '.feed-shared-update-v2__description',
-      '.feed-shared-text',
-      '.update-components-text',
-      '[data-urn] .break-words',
-      '.feed-shared-inline-show-more-text'
+      'div > div > div > div.jeCfLSDsuYbeNAnkOXlHnSTZWpDQDAipHyVA.entity-result__content-inner-container--right-padding > div > p',
+      'div > div > div > div.jeCfLSDsuYbeNAnkOXlHnSTZWpDQDAipHyVA.entity-result__content-inner-container--right-padding > div.linked-area.flex-1.cursor-pointer > p'
     ];
     
     let content = '';
@@ -88,57 +63,64 @@
       }
     }
     
-    // Extract engagement metrics
-    const likeElement = element.querySelector('[aria-label*="like"], [aria-label*="reaction"], .social-counts-reactions__count');
-    const likes = likeElement ? 
-      parseInt(extractNumberFromText(likeElement.textContent || likeElement.getAttribute('aria-label') || '0')) : 
-      0;
+    if (!content) {
+      console.log(`No content found for post ${index + 1}`);
+      return null;
+    }
     
-    const commentElement = element.querySelector('[aria-label*="comment"], .social-counts-comments__count');
-    const comments = commentElement ? 
-      parseInt(extractNumberFromText(commentElement.textContent || commentElement.getAttribute('aria-label') || '0')) : 
-      0;
+    // Extract author information - look for author elements within the post
+    const authorSelectors = [
+      '.entity-result__title-text a',
+      '.entity-result__primary-subtitle',
+      '[data-anonymize="person-name"]',
+      '.entity-result__content .entity-result__title-text'
+    ];
     
-    const shareElement = element.querySelector('[aria-label*="share"], [aria-label*="repost"], .social-counts-shares__count');
-    const shares = shareElement ? 
-      parseInt(extractNumberFromText(shareElement.textContent || shareElement.getAttribute('aria-label') || '0')) : 
-      0;
+    let authorName = `LinkedIn User ${index + 1}`;
+    let authorUrl = '';
     
-    // Extract timestamp
-    const timeElement = element.querySelector('time, [data-urn] .update-components-actor__sub-description, .feed-shared-actor__sub-description');
-    let timestamp = new Date().toISOString();
-    
-    if (timeElement) {
-      const dateTime = timeElement.getAttribute('datetime') || timeElement.textContent || timeElement.innerText;
-      if (dateTime) {
-        const parsedDate = parseLinkedInDate(dateTime);
-        if (parsedDate) {
-          timestamp = parsedDate.toISOString();
+    for (const selector of authorSelectors) {
+      const authorElement = element.querySelector(selector);
+      if (authorElement) {
+        if (authorElement.tagName === 'A') {
+          authorName = (authorElement.textContent || authorElement.innerText || '').trim();
+          authorUrl = authorElement.href || '';
+        } else {
+          authorName = (authorElement.textContent || authorElement.innerText || '').trim();
         }
+        if (authorName && authorName !== `LinkedIn User ${index + 1}`) break;
       }
     }
     
-    // Extract post URL
-    const postUrlElement = element.querySelector('a[href*="/posts/"], a[href*="/feed/update/"]');
-    const postUrl = postUrlElement ? 
-      new URL(postUrlElement.href, window.location.origin).href : 
-      `${window.location.origin}/posts/activity-${Date.now()}-${index}`;
+    // Extract headline/subtitle
+    const headlineElement = element.querySelector('.entity-result__primary-subtitle, .entity-result__secondary-subtitle');
+    const headline = headlineElement ? 
+      (headlineElement.textContent || headlineElement.innerText || '').trim() : 
+      'LinkedIn User';
     
-    // Generate unique ID
-    const id = `post-${Date.now()}-${index}`;
+    // Try to extract any engagement metrics if available
+    const likeElement = element.querySelector('[aria-label*="like"], [aria-label*="reaction"]');
+    const likes = likeElement ? 
+      parseInt(extractNumberFromText(likeElement.getAttribute('aria-label') || '0')) : 
+      0;
+    
+    // Generate timestamps and URLs
+    const timestamp = new Date().toISOString();
+    const postUrl = `${window.location.origin}/saved-post-${Date.now()}-${index}`;
+    const id = `saved-post-${Date.now()}-${index}`;
     
     return {
       id,
       author: {
         name: authorName,
         profileUrl: authorUrl,
-        headline: headline || 'LinkedIn User'
+        headline: headline
       },
       content,
       timestamp,
       likes,
-      comments,
-      shares,
+      comments: 0,
+      shares: 0,
       postUrl,
       savedAt: new Date().toISOString()
     };
@@ -147,47 +129,5 @@
   function extractNumberFromText(text) {
     const match = text.match(/[\d,]+/);
     return match ? parseInt(match[0].replace(/,/g, '')) : 0;
-  }
-  
-  function parseLinkedInDate(dateText) {
-    // Handle various LinkedIn date formats
-    const cleanText = dateText.trim().toLowerCase();
-    
-    // Handle relative dates
-    if (cleanText.includes('now') || cleanText.includes('just now')) {
-      return new Date();
-    }
-    
-    if (cleanText.includes('minute')) {
-      const minutes = parseInt(cleanText) || 1;
-      return new Date(Date.now() - minutes * 60 * 1000);
-    }
-    
-    if (cleanText.includes('hour')) {
-      const hours = parseInt(cleanText) || 1;
-      return new Date(Date.now() - hours * 60 * 60 * 1000);
-    }
-    
-    if (cleanText.includes('day')) {
-      const days = parseInt(cleanText) || 1;
-      return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-    }
-    
-    if (cleanText.includes('week')) {
-      const weeks = parseInt(cleanText) || 1;
-      return new Date(Date.now() - weeks * 7 * 24 * 60 * 60 * 1000);
-    }
-    
-    if (cleanText.includes('month')) {
-      const months = parseInt(cleanText) || 1;
-      return new Date(Date.now() - months * 30 * 24 * 60 * 60 * 1000);
-    }
-    
-    // Try to parse as actual date
-    try {
-      return new Date(dateText);
-    } catch (error) {
-      return new Date();
-    }
   }
 })();
