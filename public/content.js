@@ -64,14 +64,15 @@ async function scrapeAllPosts(appUrl) {
   let currentPage = 0;
   let hasMorePosts = true;
   let consecutiveEmptyPages = 0;
+  const MAX_POSTS = 25;
   
-  console.log('Starting to scrape all posts');
+  console.log('Starting to scrape all posts (max 25)');
   
-  while (hasMorePosts && consecutiveEmptyPages < 3) {
+  while (hasMorePosts && consecutiveEmptyPages < 3 && scrapedPosts.length < MAX_POSTS) {
     chrome.runtime.sendMessage({
       action: 'updateProgress',
       current: scrapedPosts.length,
-      total: scrapedPosts.length + 10,
+      total: Math.min(scrapedPosts.length + 10, MAX_POSTS),
       message: 'Scraping posts...'
     });
     
@@ -84,8 +85,17 @@ async function scrapeAllPosts(appUrl) {
       console.log(`Empty page ${consecutiveEmptyPages}/3`);
     } else {
       consecutiveEmptyPages = 0;
-      scrapedPosts.push(...postsOnPage);
-      console.log(`Total posts scraped: ${scrapedPosts.length}`);
+      // Only add posts up to the limit
+      const remainingSlots = MAX_POSTS - scrapedPosts.length;
+      const postsToAdd = postsOnPage.slice(0, remainingSlots);
+      scrapedPosts.push(...postsToAdd);
+      console.log(`Total posts scraped: ${scrapedPosts.length}/${MAX_POSTS}`);
+      
+      // Stop if we've reached the limit
+      if (scrapedPosts.length >= MAX_POSTS) {
+        console.log('Reached maximum post limit (25), stopping scrape');
+        break;
+      }
     }
     
     // Try to load more posts by scrolling
@@ -105,7 +115,7 @@ async function scrapeAllPosts(appUrl) {
     }
   }
   
-  console.log(`Scraping complete. Total posts: ${scrapedPosts.length}`);
+  console.log(`Scraping complete. Total posts: ${scrapedPosts.length}/${MAX_POSTS}`);
   
   // Send posts to the main app
   if (scrapedPosts.length > 0) {
