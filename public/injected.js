@@ -48,10 +48,16 @@
   }
   
   function extractSavedPostData(element, index) {
-    // Extract post content using the specific selector pattern
+    // Use more flexible selectors that ignore the dynamic class names
     const contentSelectors = [
-      'div > div > div > div.jeCfLSDsuYbeNAnkOXlHnSTZWpDQDAipHyVA.entity-result__content-inner-container--right-padding > div > p',
-      'div > div > div > div.jeCfLSDsuYbeNAnkOXlHnSTZWpDQDAipHyVA.entity-result__content-inner-container--right-padding > div.linked-area.flex-1.cursor-pointer > p'
+      // Target any div with entity-result__content-inner-container--right-padding class, then find p tags
+      'div div div div[class*="entity-result__content-inner-container--right-padding"] div p',
+      'div div div div[class*="entity-result__content-inner-container--right-padding"] div.linked-area p',
+      // Fallback to any p tag within the post structure
+      'div div div div p',
+      // More specific fallback
+      'div > div > div > div > div > p',
+      'div > div > div > div > div.linked-area > p'
     ];
     
     let content = '';
@@ -59,12 +65,29 @@
       const contentElement = element.querySelector(selector);
       if (contentElement) {
         content = (contentElement.textContent || contentElement.innerText || '').trim();
-        if (content.length > 10) break; // Found substantial content
+        if (content.length > 10) {
+          console.log(`Found content using selector: ${selector}`);
+          break; // Found substantial content
+        }
       }
     }
     
     if (!content) {
-      console.log(`No content found for post ${index + 1}`);
+      console.log(`No content found for post ${index + 1}, trying broader search...`);
+      // Last resort: find any p tag in the element
+      const allPTags = element.querySelectorAll('p');
+      for (const pTag of allPTags) {
+        const potentialContent = (pTag.textContent || pTag.innerText || '').trim();
+        if (potentialContent.length > 20) { // Look for substantial content
+          content = potentialContent;
+          console.log(`Found content via broad search: ${content.substring(0, 50)}...`);
+          break;
+        }
+      }
+    }
+    
+    if (!content) {
+      console.log(`Still no content found for post ${index + 1}`);
       return null;
     }
     
