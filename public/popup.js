@@ -59,19 +59,23 @@ document.addEventListener('DOMContentLoaded', function() {
       scrapeBtn.disabled = true;
       progress.style.display = 'block';
 
-      // Start the scraping process directly - the iframe method will handle the connection
+      // Send message to content script to start scraping
       chrome.tabs.sendMessage(tab.id, { 
         action: 'startScraping',
         appUrl: appUrl
       }, function(response) {
         if (chrome.runtime.lastError) {
-          updateStatus('Error: ' + chrome.runtime.lastError.message, 'error');
+          console.error('Content script error:', chrome.runtime.lastError);
+          updateStatus('Error: Make sure you are on the LinkedIn saved posts page and refresh the page.', 'error');
           scrapeBtn.disabled = false;
           progress.style.display = 'none';
+        } else if (response && response.success) {
+          updateStatus('Scraping started successfully...', 'info');
         }
       });
 
     } catch (error) {
+      console.error('Extension error:', error);
       updateStatus('Error: ' + error.message, 'error');
       scrapeBtn.disabled = false;
       progress.style.display = 'none';
@@ -80,27 +84,33 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Listen for messages from content script
   chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+    console.log('Popup received message:', request);
+    
     if (request.action === 'updateProgress') {
       updateProgress(request.current, request.total, request.message);
     } else if (request.action === 'scrapingComplete') {
-      updateStatus(`Successfully scraped ${request.count} posts!`, 'success');
+      updateStatus(`Successfully scraped ${request.count} posts and sent to your app!`, 'success');
       scrapeBtn.disabled = false;
       progress.style.display = 'none';
     } else if (request.action === 'scrapingError') {
       updateStatus('Error: ' + request.error, 'error');
       scrapeBtn.disabled = false;
       progress.style.display = 'none';
+    } else if (request.action === 'connectionSuccess') {
+      updateStatus('Connected to app successfully! Continuing to scrape...', 'info');
     }
   });
 
   function updateStatus(message, type) {
     status.textContent = message;
     status.className = `status ${type}`;
+    console.log('Status update:', message, type);
   }
 
   function updateProgress(current, total, message) {
     const percentage = Math.min((current / total) * 100, 100);
     progressFill.style.width = percentage + '%';
     progressText.textContent = `${message} (${current}/${total})`;
+    console.log('Progress update:', current, total, message);
   }
 });
