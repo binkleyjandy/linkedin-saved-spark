@@ -59,21 +59,7 @@ document.addEventListener('DOMContentLoaded', function() {
       scrapeBtn.disabled = true;
       progress.style.display = 'block';
 
-      // Test connection to the app first
-      updateStatus('Testing connection to your app...', 'info');
-      
-      try {
-        const response = await fetch(appUrl, { 
-          method: 'HEAD',
-          mode: 'no-cors'
-        });
-        updateStatus('Connection successful! Starting to scrape posts...', 'info');
-      } catch (fetchError) {
-        updateStatus('Warning: Cannot verify app connection. Make sure your app is running at ' + appUrl, 'error');
-        // Continue anyway as the iframe method might still work
-      }
-
-      // Start the scraping process
+      // Start the scraping process directly - the iframe method will handle the connection
       chrome.tabs.sendMessage(tab.id, { 
         action: 'startScraping',
         appUrl: appUrl
