@@ -35,6 +35,14 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
+    // Validate URL format
+    try {
+      new URL(appUrl);
+    } catch (e) {
+      updateStatus('Please enter a valid URL (e.g., http://localhost:5173)', 'error');
+      return;
+    }
+
     // Save the app URL
     chrome.storage.sync.set({ appUrl: appUrl });
 
@@ -43,7 +51,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       
       if (!tab.url.includes('linkedin.com/my-items/saved-posts')) {
-        updateStatus('Please navigate to LinkedIn saved posts first', 'error');
+        updateStatus('Please navigate to LinkedIn saved posts page first. Click "Open LinkedIn Saved Posts" button.', 'error');
         return;
       }
 
@@ -51,10 +59,30 @@ document.addEventListener('DOMContentLoaded', function() {
       scrapeBtn.disabled = true;
       progress.style.display = 'block';
 
+      // Test connection to the app first
+      updateStatus('Testing connection to your app...', 'info');
+      
+      try {
+        const response = await fetch(appUrl, { 
+          method: 'HEAD',
+          mode: 'no-cors'
+        });
+        updateStatus('Connection successful! Starting to scrape posts...', 'info');
+      } catch (fetchError) {
+        updateStatus('Warning: Cannot verify app connection. Make sure your app is running at ' + appUrl, 'error');
+        // Continue anyway as the iframe method might still work
+      }
+
       // Start the scraping process
       chrome.tabs.sendMessage(tab.id, { 
         action: 'startScraping',
         appUrl: appUrl
+      }, function(response) {
+        if (chrome.runtime.lastError) {
+          updateStatus('Error: ' + chrome.runtime.lastError.message, 'error');
+          scrapeBtn.disabled = false;
+          progress.style.display = 'none';
+        }
       });
 
     } catch (error) {
@@ -85,7 +113,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function updateProgress(current, total, message) {
-    const percentage = (current / total) * 100;
+    const percentage = Math.min((current / total) * 100, 100);
     progressFill.style.width = percentage + '%';
     progressText.textContent = `${message} (${current}/${total})`;
   }
